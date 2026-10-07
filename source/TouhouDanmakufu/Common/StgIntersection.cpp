@@ -650,7 +650,7 @@ std::wstring StgIntersectionTarget::GetInfoAsString() {
 	}
 	res += L"] ";
 
-	res += StringUtility::Format(L"address[%08x] ", (int)this);
+	res += StringUtility::Format(L"address[%p] ", static_cast<void*>(this));
 
 	res += L"obj[";
 	if (obj_.expired()) {

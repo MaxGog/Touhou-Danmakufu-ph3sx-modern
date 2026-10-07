@@ -43,7 +43,7 @@ namespace gstd {
 		virtual ~WindowBase();
 
 		HWND GetWindowHandle() { return hWnd_; }
-		bool IsDialog() { return ::GetWindowLong(hWnd_, DWL_DLGPROC) != 0; }
+		bool IsDialog() { return ::GetWindowLongPtr(hWnd_, DWLP_DLGPROC) != 0; }
 
 		bool Attach(HWND hWnd);
 		bool Detach();
@@ -65,16 +65,16 @@ namespace gstd {
 		DWORD SetWindowStyle(DWORD style) { 
 			DWORD prev = GetCurrentWindowStyle(); 
 			DWORD next = prev | style; 
-			::SetWindowLong(hWnd_, GWL_STYLE, next); 
+			::SetWindowLongPtr(hWnd_, GWL_STYLE, next);
 			return next; 
 		}
 		DWORD RemoveWindowStyle(DWORD style) { 
 			DWORD prev = GetCurrentWindowStyle(); 
 			DWORD next = prev & ~style; 
-			::SetWindowLong(hWnd_, GWL_STYLE, next); 
+			::SetWindowLongPtr(hWnd_, GWL_STYLE, next);
 			return next; 
 		}
-		DWORD GetCurrentWindowStyle() { return GetWindowLong(hWnd_, GWL_STYLE); }
+		DWORD GetCurrentWindowStyle() { return static_cast<DWORD>(GetWindowLongPtr(hWnd_, GWL_STYLE)); }
 
 		virtual void LocateParts() {};
 		void MoveWindowCenter();

@@ -47,14 +47,15 @@ bool WindowBase::Attach(HWND hWnd) {
 	if (!hWnd) return false;
 	hWnd_ = hWnd;
 	//ダイアログかウィンドウかを判定
-	int typeProc = ::GetWindowLong(hWnd, DWL_DLGPROC) != 0 ? DWL_DLGPROC : GWL_WNDPROC;
+	int typeProc = ::GetWindowLongPtr(hWnd, DWLP_DLGPROC) != 0 ? DWLP_DLGPROC : GWLP_WNDPROC;
 
 	//プロパティにインスタンスを登録
 	::SetProp(hWnd_, PROP_THIS, (HANDLE)this);
 
 	//既存のウィンドウをサブクラス化
-	if (::GetWindowLong(hWnd_, typeProc) != (LONG)_StaticWindowProcedure)
-		oldWndProc_ = (WNDPROC)::SetWindowLong(hWnd_, typeProc, (LONG)_StaticWindowProcedure);
+	if (::GetWindowLongPtr(hWnd_, typeProc) != reinterpret_cast<LONG_PTR>(_StaticWindowProcedure))
+		oldWndProc_ = reinterpret_cast<WNDPROC>(
+			::SetWindowLongPtr(hWnd_, typeProc, reinterpret_cast<LONG_PTR>(_StaticWindowProcedure)));
 	return true;
 }
 
@@ -63,8 +64,8 @@ bool WindowBase::Detach() {
 
 	//サブクラス化を解除
 	if (oldWndProc_) {
-		int typeProc = ::GetWindowLong(hWnd_, DWL_DLGPROC) != 0 ? DWL_DLGPROC : GWL_WNDPROC;
-		::SetWindowLong(hWnd_, typeProc, (DWORD)oldWndProc_);
+		int typeProc = ::GetWindowLongPtr(hWnd_, DWLP_DLGPROC) != 0 ? DWLP_DLGPROC : GWLP_WNDPROC;
+		::SetWindowLongPtr(hWnd_, typeProc, reinterpret_cast<LONG_PTR>(oldWndProc_));
 		oldWndProc_ = nullptr;
 	}
 	::RemoveProp(hWnd_, PROP_THIS);
@@ -91,7 +92,7 @@ LRESULT CALLBACK WindowBase::_StaticWindowProcedure(HWND hWnd, UINT uMsg, WPARAM
 	}
 
 	//ダイアログとウィンドウで返す値を分ける
-	return ::GetWindowLong(hWnd, DWL_DLGPROC) ?
+	return ::GetWindowLongPtr(hWnd, DWLP_DLGPROC) ?
 		FALSE : ::DefWindowProc(hWnd, uMsg, wParam, lParam);
 }
 LRESULT WindowBase::_WindowProcedure(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
@@ -102,7 +103,7 @@ LRESULT WindowBase::_CallPreviousWindowProcedure(HWND hWnd, UINT uMsg, WPARAM wP
 		return CallWindowProc(oldWndProc_, hWnd, uMsg, wParam, lParam);
 
 	//ダイアログとウィンドウで返す値を分ける
-	return ::GetWindowLong(hWnd, DWL_DLGPROC) ?
+	return ::GetWindowLongPtr(hWnd, DWLP_DLGPROC) ?
 		FALSE : ::DefWindowProc(hWnd, uMsg, wParam, lParam);
 }
 
@@ -155,7 +156,7 @@ RECT WindowBase::GetPrimaryMonitorRect() {
 //****************************************************************************
 void ModalDialog::Create(HWND hParent, LPCTSTR resource) {
 	hParent_ = hParent;
-	hWnd_ = CreateDialog((HINSTANCE)GetWindowLong(hParent, GWL_HINSTANCE),
+	hWnd_ = CreateDialog(reinterpret_cast<HINSTANCE>(GetWindowLongPtr(hParent, GWLP_HINSTANCE)),
 		resource,
 		hParent, (DLGPROC)this->_StaticWindowProcedure);
 	this->Attach(hWnd_);
@@ -197,7 +198,7 @@ void WButton::Create(HWND hWndParent) {
 	Create(hWndParent, style);
 }
 void WButton::Create(HWND hWndParent, Style& style) {
-	HINSTANCE hInst = (HINSTANCE)::GetWindowLong(hWndParent, GWL_HINSTANCE);
+	HINSTANCE hInst = reinterpret_cast<HINSTANCE>(::GetWindowLongPtr(hWndParent, GWLP_HINSTANCE));
 
 	hWnd_ = ::CreateWindowEx(
 		style.GetStyleEx(), L"BUTTON", nullptr,
@@ -220,7 +221,7 @@ bool WButton::IsChecked() {
 //WEditBox
 //****************************************************************************
 void WEditBox::Create(HWND hWndParent, WEditBox::Style& style) {
-	HINSTANCE hInst = (HINSTANCE)::GetWindowLong(hWndParent, GWL_HINSTANCE);
+	HINSTANCE hInst = reinterpret_cast<HINSTANCE>(::GetWindowLongPtr(hWndParent, GWLP_HINSTANCE));
 
 	//	DWORD style = 0;//ES_MULTILINE|ES_READONLY|ES_AUTOHSCROLL|ES_AUTOVSCROLL|WS_HSCROLL | WS_VSCROLL;
 	hWnd_ = ::CreateWindowEx(

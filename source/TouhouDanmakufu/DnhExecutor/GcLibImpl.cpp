@@ -515,7 +515,7 @@ bool EDirectGraphics::Initialize(const std::wstring& windowTitle) {
 		HWND hWndDisplay = GetParentHWND();
 		HICON winIcon = ::LoadIconW(Application::GetApplicationHandle(), MAKEINTRESOURCE(IDI_ICON));
 
-		::SetClassLong(hWndDisplay, GCL_HICON, (LONG)winIcon);
+		::SetClassLongPtr(hWndDisplay, GCLP_HICON, reinterpret_cast<LONG_PTR>(winIcon));
 		ELogger::GetInstance()->InsertOpenCommandInSystemMenu(hWndDisplay);
 
 		SetWindowTitle(windowTitle);

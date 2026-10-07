@@ -1,6 +1,11 @@
 #pragma once
 
-#include "../pch.h"
+#include <atomic>
+#include <chrono>
+#include <condition_variable>
+#include <cstdint>
+#include <mutex>
+#include <thread>
 
 namespace gstd {
 	//****************************************************************************
@@ -14,11 +19,13 @@ namespace gstd {
 			REQUEST_STOP,
 		};
 	private:
-		static DWORD __stdcall _StaticRun(LPVOID data);
+		void _StaticRun();
 	protected:
-		volatile HANDLE hThread_;
-		volatile DWORD idThread_;
-		volatile Status status_;
+		std::thread thread_;
+		std::atomic<Status> status_;
+		std::mutex completionMutex_;
+		std::condition_variable completionCondition_;
+		bool completed_;
 
 		virtual void _Run() = 0;
 	public:
@@ -28,18 +35,16 @@ namespace gstd {
 		virtual void Start();
 		virtual void Stop();
 		bool IsStop();
-		DWORD Join(DWORD mills = INFINITE);
+		uint32_t Join(int mills = -1);
 
-		Status GetStatus() { return status_; }
+		Status GetStatus() { return status_.load(); }
 	};
 
 	//****************************************************************************
 	//CriticalSection
 	//****************************************************************************
 	class CriticalSection {
-		CRITICAL_SECTION cs_;
-		volatile DWORD idThread_;
-		volatile int countLock_;
+		std::recursive_mutex mutex_;
 	public:
 		CriticalSection();
 		~CriticalSection();
@@ -78,12 +83,15 @@ namespace gstd {
 	//	Wrapper for thread event signaling
 	//****************************************************************************
 	class ThreadSignal {
-		HANDLE hEvent_;
+		std::mutex mutex_;
+		std::condition_variable condition_;
+		bool manualReset_;
+		bool signaled_;
 	public:
 		ThreadSignal(bool bManualReset = false);
 		virtual ~ThreadSignal();
 
-		DWORD Wait(int mills = INFINITE);
+		uint32_t Wait(int mills = -1);
 		void SetSignal(bool bOn = true);
 	};
 }

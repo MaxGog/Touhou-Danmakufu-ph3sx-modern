@@ -598,9 +598,8 @@ namespace gstd {
 	public:
 		virtual ~IStringInfo() {}
 		virtual std::wstring GetInfoAsString() {
-			int address = (int)this;
 			char* name = (char*)typeid(*this).name();
-			std::string str = StringUtility::Format("%s[%08x]", name, address);
+			std::string str = StringUtility::Format("%s[%p]", name, static_cast<void*>(this));
 			std::wstring res = StringUtility::ConvertMultiToWide(str);
 			return res;
 		}
