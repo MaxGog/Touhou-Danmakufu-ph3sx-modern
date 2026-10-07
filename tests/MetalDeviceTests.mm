@@ -1,5 +1,6 @@
 #include "Renderer.hpp"
 #include "MetalDevice.hpp"
+#include "MetalSpriteRenderer.hpp"
 
 #include <SDL3/SDL.h>
 
@@ -119,6 +120,36 @@ int main() {
 		!device.BindPipeline(pipeline.get()) ||
 		!device.Draw(renderer::PrimitiveTopology::TriangleList, 3, 0))
 		return Fail("Metal swapchain restoration failed: " + device.GetError());
+
+	renderer::MetalSpriteRenderer sprites;
+	if (!sprites.Initialize(device))
+		return Fail("Metal sprite pipeline initialization failed: " + sprites.GetError());
+	if (!sprites.ValidateTechnique("Render") ||
+		!sprites.ValidateTechnique("RenderInv") ||
+		!sprites.ValidateTechnique("RenderNoTexture") ||
+		sprites.ValidateTechnique("UserD3DXTechnique") ||
+		!sprites.SetTechnique("Render")) {
+		return Fail("Metal sprite technique compatibility check failed.");
+	}
+	const std::array<renderer::SpriteVertex, 4> spriteVertices{{
+		{{8.0f, 8.0f, 0.5f, 1.0f}, 0xffffffff, {0.0f, 0.0f}},
+		{{56.0f, 8.0f, 0.5f, 1.0f}, 0xffffffff, {1.0f, 0.0f}},
+		{{8.0f, 56.0f, 0.5f, 1.0f}, 0xffffffff, {0.0f, 1.0f}},
+		{{56.0f, 56.0f, 0.5f, 1.0f}, 0xffffffff, {1.0f, 1.0f}},
+	}};
+	const std::array<std::uint16_t, 6> spriteIndices{0, 1, 2, 1, 2, 3};
+	if (!sprites.Draw(spriteVertices, {}, nullptr, 64, 64, true))
+		return Fail("Metal sprite strip draw failed: " + sprites.GetError());
+	if (!sprites.SetTechnique("RenderInv") ||
+		!sprites.Draw(spriteVertices, spriteIndices, texture.get(), 64, 64, true,
+		renderer::PrimitiveTopology::TriangleList))
+		return Fail("Metal sprite-list draw failed: " + sprites.GetError());
+	if (!sprites.SetTechnique("RenderNoTexture") ||
+		!sprites.Draw(spriteVertices, {}, texture.get(), 64, 64, false))
+		return Fail("Metal textureless sprite draw failed: " + sprites.GetError());
+	if (sprites.SetTechnique("UserD3DXTechnique"))
+		return Fail("Metal accepted an unsupported custom D3DX technique.");
+	sprites.Shutdown();
 	if (!device.Present())
 		return Fail("Metal Present failed: " + device.GetError());
 

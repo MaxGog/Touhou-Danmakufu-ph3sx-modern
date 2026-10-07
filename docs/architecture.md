@@ -51,6 +51,13 @@ surface is not yet used by the executor's existing scene, transition, or
 script rendering code. D3DX Effects and triangle-fan conversion are also not
 yet implemented by the RHI.
 
+`MetalSpriteRenderer` now provides an RHI-level 2D TLX-compatible vertex path,
+dynamic vertex/index uploads, pixel-coordinate viewport conversion, texture
+sampling, alpha blending, and the built-in `Render`, `RenderInv`, and
+`RenderNoTexture` techniques. It explicitly rejects other technique names.
+This helper is validated on Metal but is not yet wired into the legacy
+`TextureManager`, `ShaderManager`, or `RenderObject` call sites.
+
 This low-level path is not yet connected to ph3sx's legacy
 `TextureManager`/`ShaderManager`, `RenderObject`, or script-facing shader API.
 The existing shader format uses D3DX Effects (`technique`/`pass` blocks), which

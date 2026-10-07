@@ -51,6 +51,7 @@ elseif(APPLE)
 	add_library(ph3sx_renderer STATIC
 		source/GcLib/renderer/RendererFactory.cpp
 		source/GcLib/renderer/MetalDevice.mm
+		source/GcLib/renderer/MetalSpriteRenderer.cpp
 	)
 	target_link_libraries(ph3sx_renderer
 		PUBLIC SDL3::SDL3
