@@ -350,6 +350,64 @@ bool EDirectInput::Initialize(HWND hWnd) {
 
 	return true;
 }
+#if defined(DNH_PROJ_EXECUTOR)
+bool EDirectInput::InitializeSDL(SDL_Window* window) {
+	padIndex_ = 0;
+	sdlInput_.SetJoystickResponseThreshold(DnhConfiguration::GetInstance()->padResponse_);
+	if (!sdlInput_.Initialize(window))
+		throw gstd::wexception(StringUtility::ConvertMultiToWide(sdlInput_.GetError()));
+	if (!InitializeExternalInput()) {
+		sdlInput_.Shutdown();
+		throw gstd::wexception(L"SDL input backend is already initialized.");
+	}
+
+	ResetVirtualKeyMap();
+	return true;
+}
+void EDirectInput::Update() {
+	if (!sdlInput_.Update())
+		throw gstd::wexception(StringUtility::ConvertMultiToWide(sdlInput_.GetError()));
+
+	auto convertState = [](platform::KeyState state) {
+		switch (state) {
+		case platform::KeyState::Push: return KEY_PUSH;
+		case platform::KeyState::Pull: return KEY_PULL;
+		case platform::KeyState::Hold: return KEY_HOLD;
+		default: return KEY_FREE;
+		}
+	};
+
+	std::array<DIKeyState, DirectInput::MAX_KEY> keys{};
+	std::array<DIKeyState, DirectInput::MAX_MOUSE_BUTTON> mouse{};
+	for (int key = 0; key < DirectInput::MAX_KEY; ++key)
+		keys[key] = convertState(sdlInput_.GetKeyState(key));
+	for (int button = 0; button < DirectInput::MAX_MOUSE_BUTTON; ++button)
+		mouse[button] = convertState(sdlInput_.GetMouseState(button));
+
+	std::vector<std::vector<DIKeyState>> pads(
+		sdlInput_.GetJoystickCount(),
+		std::vector<DIKeyState>(DirectInput::MAX_PAD_STATE, KEY_FREE));
+	for (size_t pad = 0; pad < pads.size(); ++pad) {
+		for (int button = 0; button < DirectInput::MAX_PAD_STATE; ++button)
+			pads[pad][button] = convertState(sdlInput_.GetPadState(
+				static_cast<int>(pad), button));
+	}
+
+	SetExternalInputSnapshot(keys, mouse, pads,
+		static_cast<LONG>(sdlInput_.GetMouseMoveX()),
+		static_cast<LONG>(sdlInput_.GetMouseMoveY()),
+		static_cast<LONG>(sdlInput_.GetMouseMoveZ()));
+	VirtualKeyManager::Update();
+}
+void EDirectInput::ResetInputState() {
+	sdlInput_.Reset();
+	VirtualKeyManager::ResetInputState();
+}
+void EDirectInput::ClearKeyState() {
+	sdlInput_.Reset();
+	VirtualKeyManager::ClearKeyState();
+}
+#endif
 void EDirectInput::ResetVirtualKeyMap() {
 	ClearKeyMap();
 	

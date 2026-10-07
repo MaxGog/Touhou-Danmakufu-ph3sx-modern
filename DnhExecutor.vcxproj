@@ -271,6 +271,11 @@ xcopy /e/h/y/i "$(ProjectDir)source/TouhouDanmakufu" "$(ProjectDir).bk/TouhouDan
     <ClCompile Include="source\DnhExecutor\System.cpp" />
     <ClCompile Include="source\DnhExecutor\TitleScene.cpp" />
     <ClCompile Include="source\DnhExecutor\WinMain.cpp" />
+    <ClCompile Include="source\GcLib\platform\SDLPlatform.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='ReleaseLegacy|Win32'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">NotUsing</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="source\GcLib\directx\DirectGraphics.cpp" />
     <ClCompile Include="source\GcLib\directx\DirectGraphicsBase.cpp" />
     <ClCompile Include="source\GcLib\directx\DirectInput.cpp" />
@@ -381,6 +386,7 @@ xcopy /e/h/y/i "$(ProjectDir)source/TouhouDanmakufu" "$(ProjectDir).bk/TouhouDan
     <ClInclude Include="source\GcLib\directx\DirectGraphics.hpp" />
     <ClInclude Include="source\GcLib\directx\DirectGraphicsBase.hpp" />
     <ClInclude Include="source\GcLib\directx\DirectInput.hpp" />
+    <ClInclude Include="source\GcLib\platform\SDLPlatform.hpp" />
     <ClInclude Include="source\GcLib\directx\DirectSound.hpp" />
     <ClInclude Include="source\GcLib\directx\DxCamera.hpp" />
     <ClInclude Include="source\GcLib\directx\DxConstant.hpp" />

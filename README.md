@@ -11,6 +11,13 @@ features. It was originally used for *Sapphire Panlogism* and
   **DirectX 9**.
 - A native macOS build is **not currently available**. macOS/Apple Silicon
   support is being explored; there is no supported macOS release yet.
+- The planned cross-platform architecture is SDL3 for windowing and input,
+  Direct3D 11 for Windows x64, and Metal for macOS on Apple Silicon. The
+  executor, configuration utility, and archive utility are all in scope.
+  This is a target, not an implemented or supported build.
+- SDL3 event polling and input are integrated into the Windows game executor.
+  The executor still uses its legacy Win32 window and DirectX 9 renderer; this
+  integration is an intermediate migration step, not a cross-platform build.
 - DnhViewer is not included or supported.
 - The project may still contain bugs. Please report reproducible issues using
   the [issue tracker](https://github.com/MaxGog/Touhou-Danmakufu-ph3sx-2/issues).
@@ -24,6 +31,7 @@ features. It was originally used for *Sapphire Panlogism* and
 ## Documentation
 
 - [Documentation home](./docs/README.md)
+- [Engine architecture and platform migration](./docs/architecture.md)
 - [Scripting language features](./docs/scripting-language.md)
 - [Script API reference](./docs/script-api.md)
 - [Script style guide](./docs/style-guide.md)
@@ -71,6 +79,42 @@ Open `GcProject.sln` in Visual Studio, select a `Win32` configuration such as
 `Release`, and build the solution. The projects include the game executor,
 configuration utility, and archive utility. Build outputs are written to
 `bin_th_dnh/` and `bin_ext/`.
+
+## SDL3 platform layer (migration work in progress)
+
+The game executor now polls SDL3 events and uses SDL3 for keyboard, mouse, and
+joystick/gamepad input. Its Windows build wraps the existing Win32 game window;
+the renderer and other Win32/DirectX 9 facilities are still legacy code. The
+standalone CMake target builds the SDL3 platform library and its input tests,
+not the full game executor. For the current component boundaries, frame flow,
+and planned rendering backends, see the
+[engine architecture guide](./docs/architecture.md).
+
+Initialize `SDLPlatform` before creating `SDLWindow` and `SDLInput`; each frame,
+call `SDLPlatform::PollEvents` before `SDLInput::Update`. The executor bridges
+SDL input into the existing key-state and virtual-key interfaces, preserving
+the legacy DirectInput scan-code IDs used by scripts and saved bindings.
+
+Install CMake and vcpkg, and set `VCPKG_ROOT` to the vcpkg checkout.
+Configure and build for Apple Silicon on macOS:
+
+```sh
+cmake -S . -B build/macos-arm64 \
+  -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" \
+  -DVCPKG_TARGET_TRIPLET=arm64-osx
+cmake --build build/macos-arm64 --target ph3sx_sdl_platform
+ctest --test-dir build/macos-arm64 --output-on-failure
+```
+
+Configure and build for Windows 11 x64 from PowerShell:
+
+```powershell
+cmake -S . -B build/windows-x64 `
+  -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
+  -DVCPKG_TARGET_TRIPLET=x64-windows
+cmake --build build/windows-x64 --target ph3sx_sdl_platform
+ctest --test-dir build/windows-x64 --output-on-failure
+```
 
 ## Working with this fork
 

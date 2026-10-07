@@ -13,6 +13,9 @@ EApplication::EApplication() {
 	ptrGraphics = nullptr;
 }
 EApplication::~EApplication() {
+	EDirectInput::DeleteInstance();
+	sdlWindow_.Destroy();
+	sdlPlatform_.Shutdown();
 }
 
 bool EApplication::_Initialize() {
@@ -50,6 +53,12 @@ bool EApplication::_Initialize() {
 	//logger->ResetDevice();
 
 	HWND hWndDisplay = graphics->GetParentHWND();
+	if (!sdlPlatform_.Initialize())
+		throw gstd::wexception(StringUtility::ConvertMultiToWide(sdlPlatform_.GetError()));
+	if (!sdlWindow_.WrapNative(hWndDisplay,
+		static_cast<int>(graphics->GetScreenWidth()),
+		static_cast<int>(graphics->GetScreenHeight())))
+		throw gstd::wexception(StringUtility::ConvertMultiToWide(sdlWindow_.GetError()));
 	ErrorDialog::SetParentWindowHandle(hWndDisplay);
 
 	ETextureManager* textureManager = ETextureManager::CreateInstance();
@@ -68,7 +77,7 @@ bool EApplication::_Initialize() {
 	soundManager->Initialize(hWndDisplay);
 
 	EDirectInput* input = EDirectInput::CreateInstance();
-	input->Initialize(hWndDisplay);
+	input->InitializeSDL(sdlWindow_.GetNativeWindow());
 
 	ETaskManager* taskManager = ETaskManager::CreateInstance();
 	taskManager->Initialize();
@@ -153,22 +162,27 @@ bool EApplication::_Initialize() {
 bool EApplication::_Loop() {
 	try {
 		ELogger* logger = ELogger::GetInstance();
-		ETaskManager* taskManager = ETaskManager::GetInstance();
 		EFpsController* fpsController = EFpsController::GetInstance();
 		EDirectInput* input = EDirectInput::GetInstance();
-		EDirectGraphics* graphics = EDirectGraphics::GetInstance();
 		DnhConfiguration* config = DnhConfiguration::GetInstance();
 
+		if (!sdlPlatform_.PollEvents(sdlWindow_, input->GetSDLInput()))
+			throw gstd::wexception(StringUtility::ConvertMultiToWide(sdlPlatform_.GetError()));
+		if (!sdlWindow_.IsOpen()) {
+			End();
+			return true;
+		}
+
 		HWND hWndFocused = ::GetForegroundWindow();
-		HWND hWndGraphics = graphics->GetWindowHandle();
 		HWND hWndLogger = logger->GetWindowHandle();
 
-		bWindowFocused_ = hWndFocused == hWndGraphics || hWndFocused == hWndLogger;
+		bWindowFocused_ = sdlWindow_.IsFocused() || (hWndLogger && hWndFocused == hWndLogger);
 	
 		bool enableInput = false;
 		if (!config->bEnableUnfocusedProcessing_) {
 			if (!bWindowFocused_) {
 				//Pause main thread when the window isn't focused
+				input->ClearKeyState();
 				::Sleep(10);
 				return true;
 			}
@@ -451,6 +465,8 @@ bool EApplication::_Finalize() {
 	EMeshManager::DeleteInstance();
 	EShaderManager::DeleteInstance();
 	ETextureManager::DeleteInstance();
+	sdlWindow_.Destroy();
+	sdlPlatform_.Shutdown();
 	EDirectGraphics::DeleteInstance();
 	EFpsController::DeleteInstance();
 	EFileManager::DeleteInstance();

@@ -91,6 +91,13 @@ namespace directx {
 		DIKeyState bufKey_[MAX_KEY];					//Keyboard key states
 		DIKeyState bufMouse_[MAX_MOUSE_BUTTON];			//Mouse key states
 		std::vector<std::vector<DIKeyState>> bufPad_;	//Joypad key states
+		bool externalInput_;
+		std::array<DIKeyState, MAX_KEY> externalKeys_{};
+		std::array<DIKeyState, MAX_MOUSE_BUTTON> externalMouse_{};
+		std::vector<std::vector<DIKeyState>> externalPads_;
+		LONG externalMouseMoveX_ = 0;
+		LONG externalMouseMoveY_ = 0;
+		LONG externalMouseMoveZ_ = 0;
 
 		void _WrapDXErr(HRESULT hr, const std::string& routine, const std::string& msg, bool bThrow = false);
 
@@ -119,6 +126,11 @@ namespace directx {
 		static DirectInput* GetBase() { return thisBase_; }
 
 		virtual bool Initialize(HWND hWnd);
+		bool InitializeExternalInput();
+		void SetExternalInputSnapshot(const std::array<DIKeyState, MAX_KEY>& keys,
+			const std::array<DIKeyState, MAX_MOUSE_BUTTON>& mouse,
+			const std::vector<std::vector<DIKeyState>>& pads,
+			LONG mouseMoveX, LONG mouseMoveY, LONG mouseMoveZ);
 		virtual void Update();
 
 		void UnacquireInputDevices();
@@ -128,9 +140,9 @@ namespace directx {
 		DIKeyState GetMouseState(int16_t button);
 		DIKeyState GetPadState(int16_t padNo, int16_t button);
 
-		LONG GetMouseMoveX() { return deviceMouse_.state.lX; }
-		LONG GetMouseMoveY() { return deviceMouse_.state.lY; }
-		LONG GetMouseMoveZ() { return deviceMouse_.state.lZ; }
+		LONG GetMouseMoveX() { return externalInput_ ? externalMouseMoveX_ : deviceMouse_.state.lX; }
+		LONG GetMouseMoveY() { return externalInput_ ? externalMouseMoveY_ : deviceMouse_.state.lY; }
+		LONG GetMouseMoveZ() { return externalInput_ ? externalMouseMoveZ_ : deviceMouse_.state.lZ; }
 		POINT GetMousePosition();
 
 		void ResetInputState();
@@ -141,7 +153,7 @@ namespace directx {
 		const KeyboardInputDevice* GetKeyboardDevice() { return &deviceKeyboard_; }
 		const MouseInputDevice* GetMouseDevice() { return &deviceMouse_; }
 
-		size_t GetPadDeviceCount() { return listDeviceJoypad_.size(); }
+		size_t GetPadDeviceCount() { return externalInput_ ? bufPad_.size() : listDeviceJoypad_.size(); }
 		const JoypadInputDevice* GetPadDevice(int16_t padIndex);
 	};
 

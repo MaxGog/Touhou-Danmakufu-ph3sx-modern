@@ -11,6 +11,9 @@
 		},
 		{
 			"name": "libvorbis"
+		},
+		{
+			"name": "sdl3"
 		}
 	]
 }

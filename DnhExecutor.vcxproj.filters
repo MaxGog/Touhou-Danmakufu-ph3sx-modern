@@ -14,6 +14,9 @@
     <Filter Include="source\GcLib\directx">
       <UniqueIdentifier>{5608f270-c90f-4710-8764-b5ffbd632c6f}</UniqueIdentifier>
     </Filter>
+    <Filter Include="source\GcLib\platform">
+      <UniqueIdentifier>{b4a5f14f-3247-459f-bd71-021f8652c29b}</UniqueIdentifier>
+    </Filter>
     <Filter Include="Resource Files">
       <UniqueIdentifier>{b70bfe74-68ff-4d27-822e-db3873027456}</UniqueIdentifier>
       <Extensions>ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe</Extensions>
@@ -70,6 +73,9 @@
     </ClCompile>
     <ClCompile Include="source\GcLib\directx\DirectInput.cpp">
       <Filter>source\GcLib\directx</Filter>
+    </ClCompile>
+    <ClCompile Include="source\GcLib\platform\SDLPlatform.cpp">
+      <Filter>source\GcLib\platform</Filter>
     </ClCompile>
     <ClCompile Include="source\GcLib\directx\DirectSound.cpp">
       <Filter>source\GcLib\directx</Filter>
@@ -300,6 +306,9 @@
     </ClInclude>
     <ClInclude Include="source\GcLib\directx\DirectInput.hpp">
       <Filter>source\GcLib\directx</Filter>
+    </ClInclude>
+    <ClInclude Include="source\GcLib\platform\SDLPlatform.hpp">
+      <Filter>source\GcLib\platform</Filter>
     </ClInclude>
     <ClInclude Include="source\GcLib\directx\DirectSound.hpp">
       <Filter>source\GcLib\directx</Filter>

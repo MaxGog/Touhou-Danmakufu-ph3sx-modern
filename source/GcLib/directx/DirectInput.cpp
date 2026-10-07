@@ -13,6 +13,7 @@ DirectInput::DirectInput() {
 	hWnd_ = nullptr;
 
 	pDirectInput_ = nullptr;
+	externalInput_ = false;
 }
 DirectInput::~DirectInput() {
 	if (this != thisBase_) return;
@@ -45,6 +46,33 @@ bool DirectInput::Initialize(HWND hWnd) {
 	return true;
 }
 
+bool DirectInput::InitializeExternalInput() {
+	if (thisBase_) return false;
+	Logger::WriteTop("DirectInput: Initialize external input backend.");
+	externalInput_ = true;
+	thisBase_ = this;
+	ResetInputState();
+	Logger::WriteTop("DirectInput: External input backend initialized.");
+	return true;
+}
+
+void DirectInput::SetExternalInputSnapshot(
+	const std::array<DIKeyState, MAX_KEY>& keys,
+	const std::array<DIKeyState, MAX_MOUSE_BUTTON>& mouse,
+	const std::vector<std::vector<DIKeyState>>& pads,
+	LONG mouseMoveX, LONG mouseMoveY, LONG mouseMoveZ)
+{
+	if (!externalInput_)
+		return;
+
+	externalKeys_ = keys;
+	externalMouse_ = mouse;
+	externalPads_ = pads;
+	externalMouseMoveX_ = mouseMoveX;
+	externalMouseMoveY_ = mouseMoveY;
+	externalMouseMoveZ_ = mouseMoveZ;
+}
+
 void DirectInput::_WrapDXErr(HRESULT hr, const std::string& routine, const std::string& msg, bool bThrow) {
 	if (SUCCEEDED(hr)) return;
 	std::string err = StringUtility::Format("DirectInput::%s: %s. [%s]\r\n  %s",
@@ -62,6 +90,9 @@ void DirectInput::UnacquireInputDevices() {
 	listDeviceJoypad_.clear();
 }
 void DirectInput::RefreshInputDevices() {
+	if (externalInput_)
+		return;
+
 	UnacquireInputDevices();
 
 	_InitializeKeyBoard();
@@ -391,6 +422,13 @@ bool DirectInput::_IdleJoypad() {
 }
 
 void DirectInput::Update() {
+	if (externalInput_) {
+		std::copy(externalKeys_.begin(), externalKeys_.end(), std::begin(bufKey_));
+		std::copy(externalMouse_.begin(), externalMouse_.end(), std::begin(bufMouse_));
+		bufPad_ = externalPads_;
+		return;
+	}
+
 	this->_IdleKeyboard();
 	this->_IdleMouse();
 	this->_IdleJoypad();
@@ -433,7 +471,8 @@ DIKeyState DirectInput::GetMouseState(int16_t button) {
 }
 DIKeyState DirectInput::GetPadState(int16_t padNo, int16_t button) {
 	DIKeyState res = KEY_FREE;
-	if (padNo < bufPad_.size())
+	if (padNo >= 0 && static_cast<size_t>(padNo) < bufPad_.size() &&
+		button >= 0 && button < MAX_PAD_STATE)
 		res = bufPad_[padNo][button];
 	return res;
 }
@@ -456,27 +495,38 @@ void DirectInput::ResetKeyState() {
 	for (int16_t iKey = 0; iKey < MAX_KEY; ++iKey)
 		bufKey_[iKey] = KEY_FREE;
 	ZeroMemory(&deviceKeyboard_.state, sizeof(deviceKeyboard_.state));
+	externalKeys_.fill(KEY_FREE);
 }
 void DirectInput::ResetMouseState() {
-	for (int16_t iButton = 0; iButton < 3; ++iButton)
+	for (int16_t iButton = 0; iButton < MAX_MOUSE_BUTTON; ++iButton)
 		bufMouse_[iButton] = KEY_FREE;
 	ZeroMemory(&deviceMouse_.state, sizeof(deviceMouse_.state));
+	externalMouse_.fill(KEY_FREE);
+	externalMouseMoveX_ = 0;
+	externalMouseMoveY_ = 0;
+	externalMouseMoveZ_ = 0;
 }
 void DirectInput::ResetPadState(int16_t padIndex) {
 	auto _ResetPad = [&](int16_t iPad) {
+		if (iPad < 0 || static_cast<size_t>(iPad) >= bufPad_.size())
+			return;
 		auto& pad = bufPad_[iPad];
-		auto& state = listDeviceJoypad_[iPad].state;
 
-		for (int16_t iKey = 0; iKey < bufPad_.size(); ++iKey)
+		for (int16_t iKey = 0; iKey < MAX_PAD_STATE; ++iKey)
 			pad[iKey] = KEY_FREE;
-		state.lX = 0;
-		state.lY = 0;
-		for (int16_t iButton = 0; iButton < MAX_PAD_BUTTON; ++iButton)
-			state.rgbButtons[iButton] = KEY_FREE;
+		if (static_cast<size_t>(iPad) < listDeviceJoypad_.size()) {
+			auto& state = listDeviceJoypad_[iPad].state;
+			state.lX = 0;
+			state.lY = 0;
+			for (int16_t iButton = 0; iButton < MAX_PAD_BUTTON; ++iButton)
+				state.rgbButtons[iButton] = KEY_FREE;
+		}
+		if (static_cast<size_t>(iPad) < externalPads_.size())
+			std::fill(externalPads_[iPad].begin(), externalPads_[iPad].end(), KEY_FREE);
 	};
 
 	if (padIndex < 0) {
-		for (int16_t iPad = 0; iPad < listDeviceJoypad_.size(); ++iPad) {
+		for (int16_t iPad = 0; iPad < bufPad_.size(); ++iPad) {
 			_ResetPad(iPad);
 		}
 	}
@@ -486,7 +536,7 @@ void DirectInput::ResetPadState(int16_t padIndex) {
 }
 
 const DirectInput::JoypadInputDevice* DirectInput::GetPadDevice(int16_t padIndex) {
-	if (padIndex > listDeviceJoypad_.size())
+	if (padIndex < 0 || static_cast<size_t>(padIndex) >= listDeviceJoypad_.size())
 		return nullptr;
 	return &listDeviceJoypad_[padIndex];
 }
@@ -536,7 +586,7 @@ DIKeyState VirtualKeyManager::_GetVirtualKeyState(int16_t id) {
 		res = bufKey_[key->keyboard_];
 	if (res == KEY_FREE) {
 		int16_t indexPad = key->padIndex_;
-		if (indexPad >= 0 && indexPad < listDeviceJoypad_.size()) {
+		if (indexPad >= 0 && static_cast<size_t>(indexPad) < bufPad_.size()) {
 			if (key->padButton_ >= 0 && key->padButton_ < bufPad_[indexPad].size())
 				res = bufPad_[indexPad][key->padButton_];
 		}

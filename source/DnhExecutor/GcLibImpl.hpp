@@ -5,6 +5,7 @@
 #include "Constant.hpp"
 
 #if defined(DNH_PROJ_EXECUTOR)
+#include "../GcLib/platform/SDLPlatform.hpp"
 #include "../TouhouDanmakufu/DnhGcLibImpl.hpp"
 
 //*******************************************************************
@@ -15,6 +16,8 @@ class EApplication : public Singleton<EApplication>, public Application {
 	friend Singleton<EApplication>;
 protected:
 	EDirectGraphics* ptrGraphics;
+	platform::SDLPlatform sdlPlatform_;
+	platform::SDLWindow sdlWindow_;
 
 	bool bWindowFocused_;
 

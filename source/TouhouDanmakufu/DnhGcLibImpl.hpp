@@ -5,6 +5,8 @@
 #include "DnhConstant.hpp"
 
 #if defined(DNH_PROJ_EXECUTOR)
+#include "../GcLib/platform/SDLPlatform.hpp"
+
 //*******************************************************************
 //EPathProperty
 //*******************************************************************
@@ -223,8 +225,19 @@ public:
 	};
 
 	int padIndex_;
+#if defined(DNH_PROJ_EXECUTOR)
+	platform::SDLInput sdlInput_;
+#endif
 public:
 	virtual bool Initialize(HWND hWnd);
+#if defined(DNH_PROJ_EXECUTOR)
+	bool InitializeSDL(SDL_Window* window);
+	void Update() override;
+	void ResetInputState();
+	void ClearKeyState();
+	size_t GetPadDeviceCount() { return sdlInput_.GetJoystickCount(); }
+	platform::SDLInput& GetSDLInput() { return sdlInput_; }
+#endif
 
 	void ResetVirtualKeyMap();
 
