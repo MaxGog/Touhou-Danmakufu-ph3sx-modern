@@ -19,6 +19,10 @@ features. It was originally used for *Sapphire Panlogism* and
   SDL creates and owns the executor window, but DirectX 9 still renders through
   its native `HWND` and screen-mode changes still use Win32; this is an
   intermediate migration step, not a cross-platform build.
+- A backend-neutral renderer device contract now has D3D11/Metal texture,
+  buffer, pipeline, shader compilation, and draw primitives in a separate
+  CMake target. The legacy engine asset managers and executor render path still
+  use DirectX 9 and have not yet been migrated.
 - DnhViewer is not included or supported.
 - The project may still contain bugs. Please report reproducible issues using
   the [issue tracker](https://github.com/MaxGog/Touhou-Danmakufu-ph3sx-2/issues).

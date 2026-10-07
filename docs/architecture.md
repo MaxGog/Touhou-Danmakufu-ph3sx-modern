@@ -26,8 +26,37 @@ The repository currently contains a Windows-only engine and tools:
 The intended platform direction is SDL3 for windowing, events, and input;
 Direct3D 11 for Windows x64 rendering; and Metal for macOS on Apple Silicon.
 The configuration and archive utilities are also in the overall porting
-scope. These rendering backends and full application targets are planned work,
-not implemented features.
+scope. Full application targets and rendering feature parity are not yet
+implemented.
+
+The new `source/GcLib/renderer` layer defines a backend-neutral device
+contract. Initial platform-specific device implementations now create a
+native device and swapchain/drawable, support resize, clear, and present:
+D3D11 on Windows and Metal on Apple platforms. They also declare the SDL
+window flags required for each backend. The device API also defines GPU
+textures, vertex/index/uniform buffers, resource updates, vertex layouts,
+pipeline state, resource binding, offscreen render-target switching, and
+indexed or non-indexed point, line, and triangle draws. Primitive topology is
+part of each draw command rather than being implicit in pipeline state.
+
+`ShaderCompiler` compiles a Slang module with explicit vertex and fragment
+entry points to DXBC for D3D11 or MSL for Metal. Slang is an external CMake
+package (`find_package(slang CONFIG REQUIRED)`), enabled by default with
+`PH3SX_ENABLE_SLANG=ON`. Set the option to `OFF` only to build the native
+device/resource layer without shader compilation.
+
+The Metal device test exercises an offscreen color target, return to the
+swapchain, and indexed/non-indexed triangle list/strip commands. This API
+surface is not yet used by the executor's existing scene, transition, or
+script rendering code. D3DX Effects and triangle-fan conversion are also not
+yet implemented by the RHI.
+
+This low-level path is not yet connected to ph3sx's legacy
+`TextureManager`/`ShaderManager`, `RenderObject`, or script-facing shader API.
+The existing shader format uses D3DX Effects (`technique`/`pass` blocks), which
+is not a Slang module and must be translated to explicit Slang entry points and
+pipeline state. The old managers remain the active engine path until that
+translation and the executor integration are complete.
 
 ## Current SDL3 integration
 
@@ -94,16 +123,19 @@ implementation so the SDL types can be built and tested independently. The
 legacy backend is not removed; other existing code can continue to use it
 until each application is migrated.
 
-## Build and test the SDL platform library
+## Build and test the platform and renderer libraries
 
-The CMake target uses SDL3 from vcpkg. Set `VCPKG_ROOT` to the local vcpkg
-checkout, then configure and build for Apple Silicon on macOS:
+The CMake target uses SDL3 from vcpkg. Shader compilation is enabled by
+default; install the Slang SDK and expose its CMake package config through
+`CMAKE_PREFIX_PATH`. Set `PH3SX_ENABLE_SLANG=OFF` only when intentionally
+building the native renderer without Slang. Set `VCPKG_ROOT` to the local
+vcpkg checkout, then configure and build for Apple Silicon on macOS:
 
 ```sh
 cmake -S . -B build/macos-arm64 \
   -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" \
   -DVCPKG_TARGET_TRIPLET=arm64-osx
-cmake --build build/macos-arm64 --target ph3sx_sdl_platform_tests
+cmake --build build/macos-arm64 --parallel
 ctest --test-dir build/macos-arm64 --output-on-failure
 ```
 
@@ -113,18 +145,22 @@ For Windows 11 x64, run the equivalent configuration from PowerShell:
 cmake -S . -B build/windows-x64 `
   -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
   -DVCPKG_TARGET_TRIPLET=x64-windows
-cmake --build build/windows-x64 --target ph3sx_sdl_platform_tests
+cmake --build build/windows-x64 --parallel
 ctest --test-dir build/windows-x64 --output-on-failure
 ```
 
-These commands build only `ph3sx_sdl_platform` and its tests. On Windows, the
-Visual Studio executor obtains SDL3 through the vcpkg manifest integration in
+The renderer library is enabled for Windows and Apple platforms. On Windows,
+the Visual Studio executor obtains SDL3 through the vcpkg manifest integration in
 [`vcpkg.json`](../vcpkg.json). The existing Win32/DX9 requirements still apply
-to building the full executor.
+to building the full legacy executor. The CMake `ph3sx_renderer` target does
+not build or replace the full executor.
 
-Tests use SDL's dummy video driver and cover legacy scan-code mapping, key
-transitions (including a queued quick press/release), mouse input, focus loss,
-and quit events. Hardware controller behavior is not covered by these tests.
+SDL platform tests use SDL's dummy video driver and cover legacy scan-code
+mapping, key transitions (including a queued quick press/release), mouse input,
+focus loss, and quit events. On macOS, the Metal device test creates a native
+Metal window and exercises texture/buffer updates, pipeline creation, and
+indexed and non-indexed draws; it is skipped when SDL cannot create a window.
+Hardware controller behavior is not covered by these tests.
 
 ## Migration sequence
 
@@ -138,9 +174,11 @@ runtime all at once:
    owns event polling; the DirectX 9 backend borrows its native `HWND`.
    Remaining work includes removing Win32-specific screen-mode manipulation
    and completing native window lifecycle behavior on each target.
-3. **Rendering backends:** introduce a renderer boundary and implement
-   Direct3D 11 for Windows x64 and Metal for macOS. Replace DirectX 9/D3DX9
-   dependencies and validate rendering behavior separately on both targets.
+3. **Rendering backends:** the common resource/pipeline API, D3D11/Metal GPU
+   resource implementations, and Slang entry-point compiler are in place.
+   Next, translate the D3DX Effects format and wire the API into ph3sx asset
+   managers, render objects, and script features; replace all remaining
+   DirectX 9/D3DX9 dependencies and validate parity on both targets.
 4. **Remaining platform services and tools:** migrate audio, dialogs,
    configuration UI, archive utility, and other Win32-dependent services.
 5. **Platform builds and validation:** define supported macOS arm64 and
