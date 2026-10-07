@@ -33,6 +33,7 @@ public:
 	~EApplication();
 
 	bool _Initialize();
+	bool _ProcessPlatformEvents() override;
 	bool _Loop();
 	bool _Finalize();
 public:
@@ -50,17 +51,22 @@ class EDirectGraphics : public Singleton<EDirectGraphics>, public DirectGraphics
 	friend Singleton<EDirectGraphics>;
 protected:
 	std::wstring defaultWindowTitle_;
+	platform::SDLWindow* mainWindow_;
+	bool windowSubclassInstalled_;
 protected:
-	virtual LRESULT _WindowProcedure(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+	static LRESULT CALLBACK _WindowSubclassProcedure(
+		HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam,
+		UINT_PTR subclassId, DWORD_PTR referenceData);
 public:
 	EDirectGraphics();
 	~EDirectGraphics();
 
-	virtual bool Initialize(const std::wstring& windowTitle);
+	virtual bool Initialize(const std::wstring& windowTitle, platform::SDLWindow& mainWindow);
 	void SetRenderStateFor2D(BlendMode type);
 
 	const std::wstring& GetDefaultWindowTitle() { return defaultWindowTitle_; }
 	void SetWindowTitle(const std::wstring& title);
+	void SetWindowVisible(bool visible);
 };
 
 #endif

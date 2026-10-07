@@ -878,6 +878,7 @@ DirectGraphicsPrimaryWindow::DirectGraphicsPrimaryWindow() {
 
 	hWndParent_ = nullptr;
 	hWndContent_ = nullptr;
+	externalWindow_ = false;
 
 	newScreenMode_ = ScreenMode::SCREENMODE_WINDOW;
 
@@ -885,7 +886,9 @@ DirectGraphicsPrimaryWindow::DirectGraphicsPrimaryWindow() {
 	cPosOffset_ = { 0, 0 };
 }
 DirectGraphicsPrimaryWindow::~DirectGraphicsPrimaryWindow() {
-	SetThreadExecutionState(ES_CONTINUOUS);		//Just in case
+	if (externalWindow_)
+		hWnd_ = nullptr;
+	SetThreadExecutionState(ES_CONTINUOUS);	//Just in case
 }
 
 void DirectGraphicsPrimaryWindow::_PauseDrawing() {
@@ -902,6 +905,7 @@ bool DirectGraphicsPrimaryWindow::Initialize() {
 	return res;
 }
 bool DirectGraphicsPrimaryWindow::Initialize(DirectGraphicsConfig& config) {
+	externalWindow_ = false;
 	HINSTANCE hInst = ::GetModuleHandle(nullptr);
 	lpCursor_ = LoadCursor(nullptr, IDC_ARROW);
 	{
@@ -979,6 +983,22 @@ bool DirectGraphicsPrimaryWindow::Initialize(DirectGraphicsConfig& config) {
 		*/
 	}
 	return res;
+}
+
+bool DirectGraphicsPrimaryWindow::InitializeExternalWindow(HWND hWnd, DirectGraphicsConfig& config) {
+	if (!hWnd)
+		return false;
+
+	externalWindow_ = true;
+	hWnd_ = hWnd;
+	hWndParent_ = hWnd;
+	hWndContent_ = hWnd;
+	lpCursor_ = LoadCursor(nullptr, IDC_ARROW);
+
+	const bool success = DirectGraphics::Initialize(hWndContent_, config);
+	if (success)
+		ShowCursor(config.bShowCursor);
+	return success;
 }
 
 void DirectGraphicsPrimaryWindow::_StartWindowMove(LPARAM lParam) {

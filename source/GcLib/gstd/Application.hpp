@@ -24,6 +24,8 @@ namespace gstd {
 		bool Initialize();
 
 		virtual bool _Initialize() { return true; }
+		// Return false when platform event processing requests application shutdown.
+		virtual bool _ProcessPlatformEvents();
 		virtual bool _Loop() { return true; }
 		virtual bool _Finalize() { return true; }
 

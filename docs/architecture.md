@@ -11,8 +11,9 @@ The repository currently contains a Windows-only engine and tools:
 
 - **Game executor:** `DnhExecutor` runs scripts, updates game state, and
   renders frames.
-- **Graphics:** `EDirectGraphics` and related graphics classes use Win32 and
-  DirectX 9, including legacy D3DX9 facilities.
+- **Graphics:** `EDirectGraphics` and related graphics classes use DirectX 9,
+  including legacy D3DX9 facilities. The renderer borrows the executor's SDL
+  window handle as its `HWND` on Windows.
 - **Input:** the legacy DirectInput implementation remains available. In the
   executor, SDL3 is now the active keyboard, mouse, and joystick/gamepad input
   source and feeds the existing input interfaces.
@@ -36,29 +37,38 @@ and
 [`source/GcLib/platform/SDLPlatform.cpp`](../source/GcLib/platform/SDLPlatform.cpp):
 
 - `SDLPlatform` initializes SDL and polls events.
-- `SDLWindow` creates an SDL window or wraps a native window. The executor
-  currently wraps its existing Win32 window; it does not create the main
-  rendering window through SDL.
+- `SDLWindow` creates the executor's main window and owns its SDL lifecycle.
+  It also exposes a platform handle for the current renderer boundary.
 - `SDLInput` tracks keyboard, mouse, joystick, and SDL gamepad state, and
   reports transitions as `Push`, `Hold`, `Pull`, and `Free`.
 - `EDirectInput` bridges these states into the legacy DirectInput-compatible
   state arrays and virtual-key manager. Existing bindings and scripts keep
   using the legacy scan-code identifiers.
 
-The executor initializes SDL after creating the DirectX 9 window. Each
-executor-loop iteration polls SDL events before advancing the existing
-update/render controller. A close request ends the executor loop. Input focus
-loss releases held keyboard and mouse states, and queued key/button
-transitions preserve short presses that occur between logic updates.
+The executor initializes SDL before creating its main window. The SDL-created
+window is kept hidden until DirectX 9 has initialized against the native
+`HWND`; SDL then controls the title and visibility. The shared application
+runner exposes a platform-event hook: the executor polls SDL there, while
+existing Win32 utilities keep the default Win32 event pump. A close request
+ends the executor loop. Alt+Enter and a maximize request continue to trigger
+the legacy screen-mode transition. Input focus loss releases held keyboard
+and mouse states, and queued key/button transitions preserve short presses
+that occur between logic updates.
 
-The native-window wrapper includes platform property handling for Windows and
-Cocoa, but only the existing Windows/DX9 executor calls it today. That does
-not make the executor runnable on macOS: its graphics initialization still
-requires Win32 and DirectX 9.
+The native-window handle is queried from SDL's Win32 or Cocoa window property.
+The current executor graphics backend only accepts an `HWND`, so it can use
+this creation path only on Windows. This does not make the executor runnable
+on macOS: its graphics initialization still requires Win32 and DirectX 9.
+Window-mode transitions also still use legacy Win32 operations and must be
+migrated before SDL owns the full window lifecycle.
 
 ## Component flow
 
 ```text
+SDL creates and owns main window
+      |
+      +------> Native HWND borrowed by current DirectX 9 renderer
+      |
 SDL event queue
       |
       v
@@ -76,7 +86,7 @@ SDLPlatform::PollEvents
                         v
           Existing executor update and scripts
 
-Existing executor renderer: Win32 window + DirectX 9 (unchanged)
+Existing executor renderer: DirectX 9 (still Windows-only)
 ```
 
 The platform library is kept separate from the legacy DirectX input
@@ -124,9 +134,10 @@ runtime all at once:
 1. **Platform foundation:** keep platform APIs behind reusable window, event,
    and input boundaries. The SDL3 library and executor input bridge are the
    first slice of this stage.
-2. **Window and event ownership:** migrate the executor from a wrapped Win32
-   window to a window created and owned through SDL3; remove direct Win32
-   message-loop assumptions from the executor.
+2. **Window and event ownership:** SDL now creates the executor window and
+   owns event polling; the DirectX 9 backend borrows its native `HWND`.
+   Remaining work includes removing Win32-specific screen-mode manipulation
+   and completing native window lifecycle behavior on each target.
 3. **Rendering backends:** introduce a renderer boundary and implement
    Direct3D 11 for Windows x64 and Metal for macOS. Replace DirectX 9/D3DX9
    dependencies and validate rendering behavior separately on both targets.

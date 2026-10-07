@@ -51,8 +51,11 @@ namespace platform {
 			SDL_WindowFlags flags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY);
 		bool WrapNative(void* nativeWindow, int width, int height);
 		void Destroy();
+		bool SetTitle(const std::string& title);
+		bool SetVisible(bool visible);
 
 		SDL_Window* GetNativeWindow() const { return window_; }
+		bool GetPlatformWindowHandle(void*& handle);
 		bool IsOpen() const { return open_; }
 		bool IsFocused() const { return focused_; }
 		int GetWidth() const { return width_; }

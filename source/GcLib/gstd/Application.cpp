@@ -26,25 +26,34 @@ bool Application::Initialize() {
 	return true;
 }
 bool Application::Run() {
-	MSG msg;
-	while (true) {
-		if (bAppRun_ == false) break;
-		if (::PeekMessageW(&msg, 0, 0, 0, PM_NOREMOVE)) {
-			if (!::GetMessageW(&msg, NULL, 0, 0)) break;
-			::TranslateMessage(&msg);
-			::DispatchMessageW(&msg);
-		}
-		else {
-			if (bAppActive_ == false) {
-				Sleep(10);
-				continue;
-			}
+	while (bAppRun_) {
+		if (!_ProcessPlatformEvents())
+			break;
+		if (!bAppRun_)
+			break;
 
-			if (!_Loop())
-				break;
+		if (!bAppActive_) {
+			Sleep(10);
+			continue;
 		}
+
+		if (!_Loop())
+			break;
 	}
 
 	bAppRun_ = false;
+	return true;
+}
+
+bool Application::_ProcessPlatformEvents() {
+	MSG message{};
+	while (::PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE)) {
+		if (message.message == WM_QUIT) {
+			bAppRun_ = false;
+			return false;
+		}
+		::TranslateMessage(&message);
+		::DispatchMessageW(&message);
+	}
 	return true;
 }

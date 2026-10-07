@@ -13,6 +13,7 @@ EApplication::EApplication() {
 	ptrGraphics = nullptr;
 }
 EApplication::~EApplication() {
+	EDirectGraphics::DeleteInstance();
 	EDirectInput::DeleteInstance();
 	sdlWindow_.Destroy();
 	sdlPlatform_.Shutdown();
@@ -46,19 +47,17 @@ bool EApplication::_Initialize() {
 	if (!config->bMouseVisible_)
 		WindowUtility::SetMouseVisible(false);
 
+	if (!sdlPlatform_.Initialize())
+		throw gstd::wexception(StringUtility::ConvertMultiToWide(sdlPlatform_.GetError()));
+
 	EDirectGraphics* graphics = EDirectGraphics::CreateInstance();
-	graphics->Initialize(appName);
+	if (!graphics->Initialize(appName, sdlWindow_))
+		throw gstd::wexception(L"Failed to initialize the graphics window.");
 	ptrGraphics = graphics;
 
 	//logger->ResetDevice();
 
 	HWND hWndDisplay = graphics->GetParentHWND();
-	if (!sdlPlatform_.Initialize())
-		throw gstd::wexception(StringUtility::ConvertMultiToWide(sdlPlatform_.GetError()));
-	if (!sdlWindow_.WrapNative(hWndDisplay,
-		static_cast<int>(graphics->GetScreenWidth()),
-		static_cast<int>(graphics->GetScreenHeight())))
-		throw gstd::wexception(StringUtility::ConvertMultiToWide(sdlWindow_.GetError()));
 	ErrorDialog::SetParentWindowHandle(hWndDisplay);
 
 	ETextureManager* textureManager = ETextureManager::CreateInstance();
@@ -159,19 +158,40 @@ bool EApplication::_Initialize() {
 	return true;
 }
 
+bool EApplication::_ProcessPlatformEvents() {
+	EDirectInput* input = EDirectInput::GetInstance();
+	if (!sdlPlatform_.PollEvents(sdlWindow_, input->GetSDLInput(),
+		[this](const SDL_Event& event) {
+			EDirectGraphics* graphics = EDirectGraphics::GetInstance();
+			if (event.type == SDL_EVENT_WINDOW_MAXIMIZED &&
+				event.window.windowID == SDL_GetWindowID(sdlWindow_.GetNativeWindow()) &&
+				graphics->GetScreenMode() == SCREENMODE_WINDOW) {
+				graphics->ChangeScreenMode(SCREENMODE_FULLSCREEN);
+				return;
+			}
+
+			if (event.type == SDL_EVENT_KEY_DOWN &&
+				event.key.windowID == SDL_GetWindowID(sdlWindow_.GetNativeWindow()) &&
+				!event.key.repeat &&
+				(event.key.mod & SDL_KMOD_ALT) != 0 &&
+				event.key.scancode == SDL_SCANCODE_RETURN)
+				graphics->ChangeScreenMode();
+		}))
+		throw gstd::wexception(StringUtility::ConvertMultiToWide(sdlPlatform_.GetError()));
+
+	if (!sdlWindow_.IsOpen()) {
+		End();
+		return false;
+	}
+	return true;
+}
+
 bool EApplication::_Loop() {
 	try {
 		ELogger* logger = ELogger::GetInstance();
 		EFpsController* fpsController = EFpsController::GetInstance();
 		EDirectInput* input = EDirectInput::GetInstance();
 		DnhConfiguration* config = DnhConfiguration::GetInstance();
-
-		if (!sdlPlatform_.PollEvents(sdlWindow_, input->GetSDLInput()))
-			throw gstd::wexception(StringUtility::ConvertMultiToWide(sdlPlatform_.GetError()));
-		if (!sdlWindow_.IsOpen()) {
-			End();
-			return true;
-		}
 
 		HWND hWndFocused = ::GetForegroundWindow();
 		HWND hWndLogger = logger->GetWindowHandle();
@@ -465,9 +485,9 @@ bool EApplication::_Finalize() {
 	EMeshManager::DeleteInstance();
 	EShaderManager::DeleteInstance();
 	ETextureManager::DeleteInstance();
+	EDirectGraphics::DeleteInstance();
 	sdlWindow_.Destroy();
 	sdlPlatform_.Shutdown();
-	EDirectGraphics::DeleteInstance();
 	EFpsController::DeleteInstance();
 	EFileManager::DeleteInstance();
 
@@ -480,10 +500,18 @@ bool EApplication::_Finalize() {
 //*******************************************************************
 EDirectGraphics::EDirectGraphics() {
 	defaultWindowTitle_ = L"";
+	mainWindow_ = nullptr;
+	windowSubclassInstalled_ = false;
 }
-EDirectGraphics::~EDirectGraphics() {}
-bool EDirectGraphics::Initialize(const std::wstring& windowTitle) {
+EDirectGraphics::~EDirectGraphics() {
+	if (windowSubclassInstalled_ && GetParentHWND())
+		RemoveWindowSubclass(GetParentHWND(), _WindowSubclassProcedure,
+			reinterpret_cast<UINT_PTR>(this));
+	mainWindow_ = nullptr;
+}
+bool EDirectGraphics::Initialize(const std::wstring& windowTitle, platform::SDLWindow& mainWindow) {
 	defaultWindowTitle_ = windowTitle;
+	mainWindow_ = &mainWindow;
 
 	DnhConfiguration* dnhConfig = DnhConfiguration::GetInstance();
 	size_t screenWidth = dnhConfig->screenWidth_;		// From th_dnh.def
@@ -557,18 +585,34 @@ bool EDirectGraphics::Initialize(const std::wstring& windowTitle) {
 		}
 	}
 
-	bool res = DirectGraphicsPrimaryWindow::Initialize(dxConfig);
+	if (!mainWindow.Create(StringUtility::ConvertWideToMulti(windowTitle),
+		static_cast<int>(windowedWidth), static_cast<int>(windowedHeight), SDL_WINDOW_HIDDEN))
+		throw gstd::wexception(StringUtility::ConvertMultiToWide(mainWindow.GetError()));
+
+	void* nativeWindow = nullptr;
+	if (!mainWindow.GetPlatformWindowHandle(nativeWindow))
+		throw gstd::wexception(StringUtility::ConvertMultiToWide(mainWindow.GetError()));
+	HWND hWndDisplay = static_cast<HWND>(nativeWindow);
+
+	bool res = DirectGraphicsPrimaryWindow::InitializeExternalWindow(hWndDisplay, dxConfig);
 	if (res) {
-		HWND hWndDisplay = GetParentHWND();
 		HICON winIcon = ::LoadIconW(Application::GetApplicationHandle(), MAKEINTRESOURCE(IDI_ICON));
 
-		::SetClassLongPtr(hWndDisplay, GCLP_HICON, reinterpret_cast<LONG_PTR>(winIcon));
+		::SendMessageW(hWndDisplay, WM_SETICON, ICON_BIG, reinterpret_cast<LPARAM>(winIcon));
+		::SendMessageW(hWndDisplay, WM_SETICON, ICON_SMALL, reinterpret_cast<LPARAM>(winIcon));
 		ELogger::GetInstance()->InsertOpenCommandInSystemMenu(hWndDisplay);
+		if (!SetWindowSubclass(hWndDisplay, _WindowSubclassProcedure,
+			reinterpret_cast<UINT_PTR>(this), reinterpret_cast<DWORD_PTR>(this))) {
+			throw gstd::wexception(StringUtility::Format(
+				L"Failed to install the executor window command handler (error %lu).",
+				::GetLastError()));
+		}
+		windowSubclassInstalled_ = true;
 
 		SetWindowTitle(windowTitle);
 
 		ChangeScreenMode(screenMode, false);
-		SetWindowVisible(true);
+		SetWindowVisible(dxConfig.bShowWindow);
 	}
 
 	return res;
@@ -579,21 +623,30 @@ void EDirectGraphics::SetRenderStateFor2D(BlendMode type) {
 	graphics->SetZBufferEnable(false);
 	graphics->SetZWriteEnable(false);
 }
-LRESULT EDirectGraphics::_WindowProcedure(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
-	switch (uMsg) {
-	case WM_SYSCOMMAND:
-	{
-		int nId = wParam & 0xffff;
-		if (nId == ELogger::MY_SYSCMD_OPEN)
-			ELogger::GetInstance()->ShowLogWindow();
-		break;
+LRESULT CALLBACK EDirectGraphics::_WindowSubclassProcedure(
+	HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam,
+	UINT_PTR subclassId, DWORD_PTR referenceData)
+{
+	(void)subclassId;
+	(void)referenceData;
+	if (message == WM_SYSCOMMAND && (wParam & 0xffff) == ELogger::MY_SYSCMD_OPEN) {
+		ELogger::GetInstance()->ShowLogWindow();
+		return 0;
 	}
-	}
-	return DirectGraphicsPrimaryWindow::_WindowProcedure(hWnd, uMsg, wParam, lParam);
+	return DefSubclassProc(hWnd, message, wParam, lParam);
 }
 
 void EDirectGraphics::SetWindowTitle(const std::wstring& title) {
-	HWND hWndDisplay = GetParentHWND();
-	::SetWindowTextW(hWndDisplay, (title.size() > 0) 
-		? title.c_str() : defaultWindowTitle_.c_str());
+	if (!mainWindow_)
+		throw gstd::wexception(L"The SDL main window is not initialized.");
+	const std::wstring& effectiveTitle = title.empty() ? defaultWindowTitle_ : title;
+	if (!mainWindow_->SetTitle(StringUtility::ConvertWideToMulti(effectiveTitle)))
+		throw gstd::wexception(StringUtility::ConvertMultiToWide(mainWindow_->GetError()));
+}
+
+void EDirectGraphics::SetWindowVisible(bool visible) {
+	if (!mainWindow_)
+		throw gstd::wexception(L"The SDL main window is not initialized.");
+	if (!mainWindow_->SetVisible(visible))
+		throw gstd::wexception(StringUtility::ConvertMultiToWide(mainWindow_->GetError()));
 }

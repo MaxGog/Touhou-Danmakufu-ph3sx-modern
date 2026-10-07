@@ -23,6 +23,10 @@ int main() {
 	platform::SDLWindow window;
 	Require(window.Create("SDL platform tests", 320, 240, SDL_WINDOW_HIDDEN),
 		"Window creation failed: " + window.GetError());
+	Require(window.SetTitle("SDL platform input tests"),
+		"Setting the SDL window title failed: " + window.GetError());
+	Require(window.SetVisible(false),
+		"Hiding the SDL window failed: " + window.GetError());
 
 	platform::SDLInput input;
 	Require(input.Initialize(window.GetNativeWindow()),

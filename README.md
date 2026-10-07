@@ -16,8 +16,9 @@ features. It was originally used for *Sapphire Panlogism* and
   executor, configuration utility, and archive utility are all in scope.
   This is a target, not an implemented or supported build.
 - SDL3 event polling and input are integrated into the Windows game executor.
-  The executor still uses its legacy Win32 window and DirectX 9 renderer; this
-  integration is an intermediate migration step, not a cross-platform build.
+  SDL creates and owns the executor window, but DirectX 9 still renders through
+  its native `HWND` and screen-mode changes still use Win32; this is an
+  intermediate migration step, not a cross-platform build.
 - DnhViewer is not included or supported.
 - The project may still contain bugs. Please report reproducible issues using
   the [issue tracker](https://github.com/MaxGog/Touhou-Danmakufu-ph3sx-2/issues).
@@ -82,18 +83,20 @@ configuration utility, and archive utility. Build outputs are written to
 
 ## SDL3 platform layer (migration work in progress)
 
-The game executor now polls SDL3 events and uses SDL3 for keyboard, mouse, and
-joystick/gamepad input. Its Windows build wraps the existing Win32 game window;
-the renderer and other Win32/DirectX 9 facilities are still legacy code. The
+The game executor now creates and owns its main window through SDL3, polls SDL3
+events, and uses SDL3 for keyboard, mouse, and joystick/gamepad input. The
+current DirectX 9 renderer borrows the SDL window's native `HWND`; screen-mode
+operations and other Win32/DirectX 9 facilities remain legacy code. The
 standalone CMake target builds the SDL3 platform library and its input tests,
-not the full game executor. For the current component boundaries, frame flow,
+not the full game executor. For the current component boundaries, event flow,
 and planned rendering backends, see the
 [engine architecture guide](./docs/architecture.md).
 
-Initialize `SDLPlatform` before creating `SDLWindow` and `SDLInput`; each frame,
-call `SDLPlatform::PollEvents` before `SDLInput::Update`. The executor bridges
-SDL input into the existing key-state and virtual-key interfaces, preserving
-the legacy DirectInput scan-code IDs used by scripts and saved bindings.
+Initialize `SDLPlatform` before creating `SDLWindow` and `SDLInput`; poll
+`SDLPlatform::PollEvents` before updating game logic. The executor does this
+through the shared application event hook, then bridges SDL input into the
+existing key-state and virtual-key interfaces, preserving the legacy
+DirectInput scan-code IDs used by scripts and saved bindings.
 
 Install CMake and vcpkg, and set `VCPKG_ROOT` to the vcpkg checkout.
 Configure and build for Apple Silicon on macOS:

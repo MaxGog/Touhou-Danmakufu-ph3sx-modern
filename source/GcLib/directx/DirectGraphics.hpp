@@ -224,6 +224,7 @@ namespace directx {
 		HWND hWndContent_;
 
 		ScreenMode newScreenMode_;
+		bool externalWindow_;
 
 		bool bWindowMoveEnable_;
 		POINT cPosOffset_;
@@ -242,6 +243,7 @@ namespace directx {
 
 		virtual bool Initialize();
 		virtual bool Initialize(DirectGraphicsConfig& config);
+		bool InitializeExternalWindow(HWND hWnd, DirectGraphicsConfig& config);
 
 		void ChangeScreenMode();
 		void ChangeScreenMode(ScreenMode newMode, bool bNoRepeated = true);

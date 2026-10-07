@@ -104,6 +104,62 @@ namespace platform {
 		height_ = 0;
 	}
 
+	bool SDLWindow::SetTitle(const std::string& title) {
+		if (!window_) {
+			error_ = "Cannot set the title without an SDL window.";
+			return false;
+		}
+		if (!SDL_SetWindowTitle(window_, title.c_str())) {
+			error_ = SDL_GetError();
+			return false;
+		}
+		error_.clear();
+		return true;
+	}
+
+	bool SDLWindow::SetVisible(bool visible) {
+		if (!window_) {
+			error_ = "Cannot change visibility without an SDL window.";
+			return false;
+		}
+		const bool success = visible ? SDL_ShowWindow(window_) : SDL_HideWindow(window_);
+		if (!success) {
+			error_ = SDL_GetError();
+			return false;
+		}
+		error_.clear();
+		return true;
+	}
+
+	bool SDLWindow::GetPlatformWindowHandle(void*& handle) {
+		handle = nullptr;
+		if (!window_) {
+			error_ = "Cannot get a platform handle without an SDL window.";
+			return false;
+		}
+
+		const SDL_PropertiesID properties = SDL_GetWindowProperties(window_);
+		if (!properties) {
+			error_ = SDL_GetError();
+			return false;
+		}
+
+#if defined(_WIN32)
+		handle = SDL_GetPointerProperty(properties, SDL_PROP_WINDOW_WIN32_HWND_POINTER, nullptr);
+#elif defined(__APPLE__)
+		handle = SDL_GetPointerProperty(properties, SDL_PROP_WINDOW_COCOA_WINDOW_POINTER, nullptr);
+#else
+		error_ = "Getting a native window handle is unsupported on this platform.";
+		return false;
+#endif
+		if (!handle) {
+			error_ = "SDL did not expose a native window handle.";
+			return false;
+		}
+		error_.clear();
+		return true;
+	}
+
 	void SDLWindow::HandleEvent(const SDL_Event& event) {
 		if (!window_)
 			return;
