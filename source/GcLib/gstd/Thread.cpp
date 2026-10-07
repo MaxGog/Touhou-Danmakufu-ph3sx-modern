@@ -1,102 +1,99 @@
-#include "source/GcLib/pch.h"
-
 #include "Thread.hpp"
-#include "GstdUtility.hpp"
 
 using namespace gstd;
+
+namespace {
+	constexpr uint32_t threadWaitTimeout = 258;
+	constexpr uint32_t threadWaitFailed = UINT32_MAX;
+}
 
 //*******************************************************************
 //Thread
 //*******************************************************************
 Thread::Thread() {
-	hThread_ = nullptr;
-	idThread_ = 0;
 	status_ = STOP;
+	completed_ = true;
 }
 Thread::~Thread() {
 	this->Stop();
 	this->Join();
-	if (hThread_) {
-		::CloseHandle(hThread_);
-		hThread_ = nullptr;
-		idThread_ = 0;
-	}
 }
-DWORD __stdcall Thread::_StaticRun(LPVOID data) {
+void Thread::_StaticRun() {
 	try {
-		Thread* thread = reinterpret_cast<Thread*>(data);
-		thread->status_ = RUN;
-		thread->_Run();
-		thread->status_ = STOP;
+		_Run();
 	}
 	catch (...) {
 		//Errors unhandled
 	}
-	return 0;
+	status_ = STOP;
+	{
+		std::lock_guard<std::mutex> lock(completionMutex_);
+		completed_ = true;
+	}
+	completionCondition_.notify_all();
 }
 void Thread::Start() {
-	if (status_ != STOP) {
+	if (thread_.joinable()) {
 		this->Stop();
 		this->Join();
 	}
-	hThread_ = CreateThread(nullptr, 0, _StaticRun, (void*)this, 0, (LPDWORD)&idThread_);
+	{
+		std::lock_guard<std::mutex> lock(completionMutex_);
+		completed_ = false;
+	}
+	status_ = RUN;
+	try {
+		thread_ = std::thread(&Thread::_StaticRun, this);
+	}
+	catch (...) {
+		status_ = STOP;
+		{
+			std::lock_guard<std::mutex> lock(completionMutex_);
+			completed_ = true;
+		}
+		throw;
+	}
 }
 void Thread::Stop() {
-	if (status_ == RUN) status_ = REQUEST_STOP;
+	Status expected = RUN;
+	status_.compare_exchange_strong(expected, REQUEST_STOP);
 }
 bool Thread::IsStop() {
-	return hThread_ == nullptr || status_ == STOP;
+	return status_.load() == STOP;
 }
-DWORD Thread::Join(DWORD mills) {
-	DWORD res = WAIT_OBJECT_0;
+uint32_t Thread::Join(int mills) {
+	if (!thread_.joinable())
+		return 0;
+	if (thread_.get_id() == std::this_thread::get_id())
+		return threadWaitFailed;
 
-	if (hThread_) {
-		res = ::WaitForSingleObject(hThread_, mills);
+	{
+		std::unique_lock<std::mutex> lock(completionMutex_);
+		if (mills < 0) {
+			completionCondition_.wait(lock, [this] { return completed_; });
+		}
+		else if (!completionCondition_.wait_for(lock, std::chrono::milliseconds(mills),
+			[this] { return completed_; })) {
+			return threadWaitTimeout;
+		}
 	}
 
-	if (hThread_) {
-		if (res != WAIT_TIMEOUT)
-			::CloseHandle(hThread_);
-		hThread_ = nullptr;
-		idThread_ = 0;
-		status_ = STOP;
-	}
-	return res;
+	thread_.join();
+	return 0;
 }
 
 //*******************************************************************
 //CriticalSection
 //*******************************************************************
 CriticalSection::CriticalSection() {
-	idThread_ = 0;
-	countLock_ = 0;
-	::InitializeCriticalSection(&cs_);
 }
 CriticalSection::~CriticalSection() {
-	::DeleteCriticalSection(&cs_);
 }
 void CriticalSection::Enter() {
-	if (::GetCurrentThreadId() == idThread_) {
-		countLock_++;
-		return;
-	}
-
-	::EnterCriticalSection(&cs_);
-	countLock_ = 1;
-	idThread_ = ::GetCurrentThreadId();
+	mutex_.lock();
 }
 void CriticalSection::Leave() {
-	if (::GetCurrentThreadId() == idThread_) {
-		countLock_--;
-		if (countLock_ != 0) return;
-		if (countLock_ < 0)
-			throw std::exception("CriticalSection: Thread is not locked.");
-	}
-	else {
-		throw std::exception("CriticalSection: Thread cannot be locked.");
-	}
-	idThread_ = 0;
-	::LeaveCriticalSection(&cs_);
+	mutex_.unlock();
 }
 
 //*******************************************************************
@@ -117,20 +114,35 @@ StaticLock::~StaticLock() {
 //ThreadSignal
 //*******************************************************************
 ThreadSignal::ThreadSignal(bool bManualReset) {
-	hEvent_ = ::CreateEventW(nullptr, bManualReset, false, nullptr);
+	manualReset_ = bManualReset;
+	signaled_ = false;
 }
 ThreadSignal::~ThreadSignal() {
-	::CloseHandle(hEvent_);
 }
-DWORD ThreadSignal::Wait(int mills) {
-	DWORD res = WAIT_OBJECT_0;
-	if (hEvent_)
-		res = ::WaitForSingleObject(hEvent_, mills);
-	return res;
+uint32_t ThreadSignal::Wait(int mills) {
+	std::unique_lock<std::mutex> lock(mutex_);
+	bool signaled;
+	if (mills < 0) {
+		condition_.wait(lock, [this] { return signaled_; });
+		signaled = true;
+	}
+	else {
+		signaled = condition_.wait_for(lock, std::chrono::milliseconds(mills),
+			[this] { return signaled_; });
+	}
+	if (signaled && !manualReset_)
+		signaled_ = false;
+	return signaled ? 0 : threadWaitTimeout;
 }
 void ThreadSignal::SetSignal(bool bOn) {
-	if (bOn)
-		::SetEvent(hEvent_);
-	else
-		::ResetEvent(hEvent_);
+	{
+		std::lock_guard<std::mutex> lock(mutex_);
+		signaled_ = bOn;
+	}
+	if (bOn) {
+		if (manualReset_)
+			condition_.notify_all();
+		else
+			condition_.notify_one();
+	}
 }

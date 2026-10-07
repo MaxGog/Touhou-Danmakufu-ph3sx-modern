@@ -596,11 +596,12 @@ namespace gstd {
 	//CompareUtility
 	class Compare {
 	public:
-		template<std::totally_ordered T>
-		static int Ord(const T& a, const T& b) {
-			if (a < b) return -1;
-			else if (a > b) return 1;
-			else return 0;
+		virtual ~IStringInfo() {}
+		virtual std::wstring GetInfoAsString() {
+			char* name = (char*)typeid(*this).name();
+			std::string str = StringUtility::Format("%s[%p]", name, static_cast<void*>(this));
+			std::wstring res = StringUtility::ConvertMultiToWide(str);
+			return res;
 		}
 	};
 
