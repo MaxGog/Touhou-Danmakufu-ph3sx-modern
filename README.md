@@ -21,6 +21,13 @@ features. It was originally used for *Sapphire Panlogism* and
 - Additional scripting-language features and script functions.
 - A revised `.dat` archive format with compression and encryption.
 
+## Documentation
+
+- [Documentation home](./docs/README.md)
+- [Scripting language features](./docs/scripting-language.md)
+- [Script API reference](./docs/script-api.md)
+- [Script style guide](./docs/style-guide.md)
+
 ## Compatibility
 
 ph3sx is not fully compatible with vanilla Danmakufu ph3. In particular,
